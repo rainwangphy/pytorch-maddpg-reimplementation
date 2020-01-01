@@ -5,6 +5,7 @@ import numpy as np
 import torch
 from algorithm.maddpg import MADDPG
 from utils.buffer import ReplayBuffer
+from gym.spaces import Box
 
 
 def run(config):
@@ -16,17 +17,21 @@ def run(config):
     env = make_env(config.env_id)
     np.random.seed(config.seed)
     torch.manual_seed(config.seed)
+    if all([hasattr(a, 'adversary') for a in env.agents]):
+        agent_types = ['adversary' if a.adversary else 'agent' for a in env.agents]
+    else:
+        agent_types = ['agent' for _ in env.agents]
 
-    maddpg = MADDPG.init_from_env(env, agent_alg=config.agent_alg, adversary_alg=config.adversary_alg,
+    maddpg = MADDPG.init_from_env(env, agent_types, agent_alg=config.agent_alg, adversary_alg=config.adversary_alg,
                                   tau=config.tau, lr=config.lr, hidden_dim=config.hidden_dim)
     replay_buffer = ReplayBuffer(config.buffer_length, maddpg.num_agent)
 
-    for ep_i in range(config.n_epispdes):
+    for ep_i in range(config.n_episodes):
         print("Episodes %i of %i" % (ep_i + 1, config.n_episodes))
         observations = env.reset()
 
         for et_i in range(config.episode_length):
-            torch_observations = [torch.from_numpy(np.vstack(observations[:, i])) for i in range(maddpg.num_agent)]
+            torch_observations = [torch.from_numpy(observations[i]).float() for i in range(maddpg.num_agent)]
             torch_agent_actions = maddpg.step(torch_observations)
             agent_actions = [action.data.numpy() for action in torch_agent_actions]
             next_observations, rewards, dones, infos = env.step(agent_actions)
@@ -41,7 +46,7 @@ def run(config):
                     maddpg.update(sample, agent_i=a_i)
                 maddpg.update_all_agent()
         print("Episode rewards ")
-        print(replay_buffer.get_episode_reward(ep_i))
+        print(replay_buffer.get_episode_rewards(config.episode_length))
 
     env.close()
 
@@ -62,7 +67,7 @@ if __name__ == '__main__':
     parser.add_argument("--episode_length", default=25, type=int)
     parser.add_argument("--steps_per_update", default=100, type=int)
     parser.add_argument("--batch_size",
-                        default=1024, type=int,
+                        default=48, type=int,
                         help="Batch size for model training")
     parser.add_argument("--n_exploration_eps", default=25000, type=int)
     parser.add_argument("--init_noise_scale", default=0.3, type=float)

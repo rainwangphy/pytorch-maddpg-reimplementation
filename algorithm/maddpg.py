@@ -42,10 +42,11 @@ class MADDPG(object):
                 zip(self.agents, observations)]
 
     @classmethod
-    def init_from_env(cls, env, agent_alg="MADDPG", adversary_alg="MADDPG",
+    def init_from_env(cls, env, agent_types, agent_alg="MADDPG", adversary_alg="MADDPG",
                       gamma=0.95, tau=0.01, lr=0.01, hidden_dim=64):
         """
 
+        :param agent_types:
         :param env:
         :param agent_alg:
         :param adversary_alg:
@@ -56,7 +57,7 @@ class MADDPG(object):
         :return:
         """
         alg_types = [adversary_alg if agent_type == 'adversary' else agent_alg for
-                     agent_type in env.agent_types]
+                     agent_type in agent_types]
 
         agent_init_parameters = []
 
@@ -120,6 +121,12 @@ class MADDPG(object):
         return [self.agents[i].target_actor for i in range(self.num_agent)]
 
     def update(self, sample, agent_i):
+        """
+        TODO: to make the sample into valid inputs
+        :param sample:
+        :param agent_i:
+        :return:
+        """
         obs, acs, rews, next_obs, dones = sample
         current_agent = self.agents[agent_i]
 
@@ -132,21 +139,20 @@ class MADDPG(object):
             else:
                 all_target_actions = [pi(n_obs) for pi, n_obs in zip(all_target_actors, next_obs)]
 
-            target_critic_input = torch.cat((*next_obs, *all_target_actions), dim=1)
+            target_critic_input = torch.cat((*next_obs, *all_target_actions), dim=1)  # TODO need to be refined
         else:
             if self.discrete_action:
-                target_critic_input = torch.cat([next_obs[agent_i], onehot_from_logits(
-                    current_agent.target_actor(next_obs[agent_i])
-                )], dim=1)
+                target_critic_input = torch.cat((next_obs[agent_i], onehot_from_logits(
+                    current_agent.target_actor(next_obs[agent_i]))), dim=1)
             else:
-                target_critic_input = torch.cat([next_obs[agent_i],
-                                                 current_agent.target_actor(next_obs[agent_i])], dim=1)
+                target_critic_input = torch.cat((next_obs[agent_i],
+                                                 current_agent.target_actor(next_obs[agent_i])), dim=1)
         target_critic_value = current_agent.target_critic(target_critic_input)
         target_value = rews[agent_i].view(-1, 1) + self.gamma * target_critic_value * (1-dones[agent_i]).view(-1, 1)
         if self.alg_types[agent_i] == 'MADDPG':
-            critic_input = torch.cat([obs, acs], dim=1)
+            critic_input = torch.cat((*obs, *acs), dim=1)  # TODO need to be refined
         else:  # DDPG
-            critic_input = torch.cat([obs[agent_i], acs[agent_i]], dim=1)
+            critic_input = torch.cat((obs[agent_i], acs[agent_i]), dim=1)
         actual_value = current_agent.critic(critic_input)
 
         critic_loss = MSELoss(actual_value, target_value.detach())

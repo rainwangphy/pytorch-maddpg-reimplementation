@@ -18,7 +18,7 @@ class ReplayBuffer(object):
         """
         return len(self.buffer)
 
-    def get_episode_reward(self, episode_length):
+    def get_episode_rewards(self, episode_length):
         """
 
         :return:
@@ -73,17 +73,17 @@ class ReplayBuffer(object):
         """
         return [np.random.randint(0, len(self.buffer)) for _ in range(batch_size)]
 
-    def to_tensor(self, x):
-        """
-
-        :param x:
-        :return:
-        """
-        if self.to_gpu:
-            tensor_x = torch.tensor(x, requires_grad=False).cuda()
-        else:
-            tensor_x = torch.tensor(x, requires_grad=False)
-        return tensor_x
+    # def to_tensor(self, x):
+    #     """
+    #
+    #     :param x:
+    #     :return:
+    #     """
+    #     if self.to_gpu:
+    #         tensor_x = torch.tensor(x, requires_grad=False).cuda()
+    #     else:
+    #         tensor_x = torch.tensor(x, requires_grad=False)
+    #     return tensor_x
 
     def generate_sample(self, index_of_data):
         """
@@ -95,10 +95,10 @@ class ReplayBuffer(object):
         for i in index_of_data:
             data = self.buffer[i]
             observations, actions, rewards, next_observations, dones = data
-            observations_batch.append(self.to_tensor(observations))
-            actions_batch.append(self.to_tensor(actions))
-            rewards_batch.append(self.to_tensor(rewards))
-            next_observations_batch.append(self.to_tensor(next_observations))
-            dones_batch.append(self.to_tensor(dones))
+            observations_batch.append(observations)
+            actions_batch.append(actions)
+            rewards_batch.append(rewards)
+            next_observations_batch.append(next_observations)
+            dones_batch.append(dones)
 
         return observations_batch, actions_batch, rewards_batch, next_observations_batch, dones_batch
