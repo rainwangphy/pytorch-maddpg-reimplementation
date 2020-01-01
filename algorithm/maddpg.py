@@ -60,10 +60,11 @@ class MADDPG(object):
                      agent_type in agent_types]
 
         agent_init_parameters = []
+        discrete_action = False
 
         for action_space, observation_space, algtype in zip(env.action_space,
-                                                             env.observation_space,
-                                                             alg_types):
+                                                            env.observation_space,
+                                                            alg_types):
             number_input_actor = observation_space.shape[0]
 
             if isinstance(action_space, Box):
@@ -115,7 +116,6 @@ class MADDPG(object):
 
     def target_actors(self):
         """
-
         :return:
         """
         return [self.agents[i].target_actor for i in range(self.num_agent)]
