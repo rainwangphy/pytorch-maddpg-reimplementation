@@ -44,8 +44,7 @@ class DDPGAgent(object):
 
     def get_params(self):
         """
-
-        :return:
+        :return: all parameters of the variables of the agent
         """
         return {
             'actor': self.actor.state_dict(),

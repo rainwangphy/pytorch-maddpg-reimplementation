@@ -6,6 +6,7 @@ from gym.spaces import Box
 from utils.agent import DDPGAgent
 from utils.misc import onehot_from_logits, gumbel_softmax, soft_update
 import torch
+import numpy as np
 
 MSELoss = torch.nn.MSELoss()
 
@@ -34,9 +35,9 @@ class MADDPG(object):
 
     def step(self, observations, explore=False):
         """
-
         :param observations: observations of agent
         :param explore: whether the agents explore or not
+        :return: the action of each agent
         """
         return [a.step(observation, explore=explore) for a, observation in
                 zip(self.agents, observations)]
@@ -54,7 +55,7 @@ class MADDPG(object):
         :param tau:
         :param lr:
         :param hidden_dim:
-        :return:
+        :return: an instance of the maddpg class
         """
         alg_types = [adversary_alg if agent_type == 'adversary' else agent_alg for
                      agent_type in agent_types]
@@ -109,25 +110,29 @@ class MADDPG(object):
 
     def actors(self):
         """
-
-        :return:
+        :return: the actors of all agents
         """
         return [self.agents[i].actor for i in range(self.num_agent)]
 
     def target_actors(self):
         """
-        :return:
+        :return: the target actors of all agents
         """
         return [self.agents[i].target_actor for i in range(self.num_agent)]
 
     def update(self, sample, agent_i):
         """
         TODO: to make the sample into valid inputs
-        :param sample:
-        :param agent_i:
-        :return:
+        :param sample: the batch of experiences
+        :param agent_i: the agent to be updated
         """
         obs, acs, rews, next_obs, dones = sample
+        obs_batch = np.vstack(obs)
+        acs_batch = np.vstack(acs)
+        rews_batch = np.vstack(rews)
+        next_obs_batch = np.vstack(next_obs)
+        dones_batch = np.vstack(dones)
+
         current_agent = self.agents[agent_i]
 
         current_agent.critic_optimizer.zero_grad()
@@ -148,7 +153,7 @@ class MADDPG(object):
                 target_critic_input = torch.cat((next_obs[agent_i],
                                                  current_agent.target_actor(next_obs[agent_i])), dim=1)
         target_critic_value = current_agent.target_critic(target_critic_input)
-        target_value = rews[agent_i].view(-1, 1) + self.gamma * target_critic_value * (1-dones[agent_i]).view(-1, 1)
+        target_value = rews[agent_i].view(-1, 1) + self.gamma * target_critic_value * (1 - dones[agent_i]).view(-1, 1)
         if self.alg_types[agent_i] == 'MADDPG':
             critic_input = torch.cat((*obs, *acs), dim=1)  # TODO need to be refined
         else:  # DDPG
@@ -184,7 +189,7 @@ class MADDPG(object):
             critic_input = torch.cat([obs[agent_i], current_action_input_critic], dim=1)
 
         actor_loss = -current_agent.critic(critic_input).mean()
-        actor_loss += (current_action_out**2).mean() * 1e-3
+        actor_loss += (current_action_out ** 2).mean() * 1e-3
         actor_loss.backward()
         torch.nn.utils.clip_grad_norm(current_agent.actor.parameters(), 0.5)
         current_agent.actor_optimizer.step()
@@ -197,5 +202,3 @@ class MADDPG(object):
             soft_update(a.target_actor, a.actor, self.tau)
             soft_update(a.target_critic, a.critic, self.tau)
         self.num_iteration += 1
-
-

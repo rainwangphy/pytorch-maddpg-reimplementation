@@ -52,7 +52,6 @@ def run(config):
 
 
 if __name__ == '__main__':
-
     parser = argparse.ArgumentParser()
     parser.add_argument("--env_id", default="simple_tag", help="Name of environment")
     parser.add_argument("--model_name", default="simple_tag",
