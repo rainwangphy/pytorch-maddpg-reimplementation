@@ -1,5 +1,4 @@
 import numpy as np
-import torch
 from copy import deepcopy
 
 
@@ -73,18 +72,6 @@ class ReplayBuffer(object):
         """
         return [np.random.randint(0, len(self.buffer)) for _ in range(batch_size)]
 
-    # def to_tensor(self, x):
-    #     """
-    #
-    #     :param x:
-    #     :return:
-    #     """
-    #     if self.to_gpu:
-    #         tensor_x = torch.tensor(x, requires_grad=False).cuda()
-    #     else:
-    #         tensor_x = torch.tensor(x, requires_grad=False)
-    #     return tensor_x
-
     def generate_sample(self, index_of_data):
         """
 
@@ -101,5 +88,6 @@ class ReplayBuffer(object):
             next_observations_batch.append(np.concatenate(next_observations[:]))
             dones_batch.append(dones)
 
-        return np.array(observations_batch), np.array(actions_batch), np.array(rewards_batch),\
-               np.array(next_observations_batch), np.array(dones_batch)
+        return \
+            np.array(observations_batch), np.array(actions_batch), np.array(rewards_batch), \
+            np.array(next_observations_batch), np.array(dones_batch)
