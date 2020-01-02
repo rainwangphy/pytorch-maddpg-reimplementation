@@ -95,10 +95,11 @@ class ReplayBuffer(object):
         for i in index_of_data:
             data = self.buffer[i]
             observations, actions, rewards, next_observations, dones = data
-            observations_batch.append(observations)
-            actions_batch.append(actions)
+            observations_batch.append(np.concatenate(observations[:]))
+            actions_batch.append(np.concatenate(actions[:]))
             rewards_batch.append(rewards)
-            next_observations_batch.append(next_observations)
+            next_observations_batch.append(np.concatenate(next_observations[:]))
             dones_batch.append(dones)
 
-        return observations_batch, actions_batch, rewards_batch, next_observations_batch, dones_batch
+        return np.array(observations_batch), np.array(actions_batch), np.array(rewards_batch),\
+               np.array(next_observations_batch), np.array(dones_batch)

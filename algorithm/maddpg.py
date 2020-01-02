@@ -12,9 +12,10 @@ MSELoss = torch.nn.MSELoss()
 
 
 class MADDPG(object):
-    def __init__(self, agent_init_params, alg_types,
+    def __init__(self, env, agent_init_params, alg_types,
                  gamma=0.95, tau=0.01, lr=0.01, hidden_dim=64,
                  discrete_action=False):
+        self.env = env
         self.num_agent = len(alg_types)
         self.alg_types = alg_types
         self.gamma = gamma
@@ -32,6 +33,28 @@ class MADDPG(object):
         self.hidden_dim = hidden_dim
 
         self.num_iteration = 0
+        self.observation_index = []
+        self.action_index = []
+        self.generate_index()
+
+    def generate_index(self):
+        """
+        generate the index of begin and end of each observation and action
+
+        """
+        begin_o, end_o, begin_a, end_a = 0, 0, 0, 0
+        for obs_space, act_space in zip(self.env.observation_space, self.env.action_space):
+            end_o = end_o + obs_space.shape[0]
+            if isinstance(act_space, Box):
+                end_a = act_space.shape[0]
+            else:
+                end_a = act_space.n
+            range_o = (begin_o, end_o)
+            range_a = (begin_a, end_a)
+            self.observation_index.append(range_o)
+            self.action_index.append(range_a)
+            begin_o = end_o
+            begin_a = end_a
 
     def step(self, observations, explore=False):
         """
@@ -96,6 +119,7 @@ class MADDPG(object):
             )
 
         init_dict = {
+            'env': env,
             'gamma': gamma, 'tau': tau, 'lr': lr,
             'hidden_dim': hidden_dim,
             'alg_types': alg_types,
@@ -127,11 +151,9 @@ class MADDPG(object):
         :param agent_i: the agent to be updated
         """
         obs, acs, rews, next_obs, dones = sample
-        obs_batch = np.vstack(obs)
-        acs_batch = np.vstack(acs)
-        rews_batch = np.vstack(rews)
-        next_obs_batch = np.vstack(next_obs)
-        dones_batch = np.vstack(dones)
+        tensor_acs = torch.from_numpy(acs).float()
+        tensor_obs = torch.from_numpy(obs).float()
+        tensor_next_obs = torch.from_numpy(next_obs).float()
 
         current_agent = self.agents[agent_i]
 
@@ -144,20 +166,30 @@ class MADDPG(object):
             else:
                 all_target_actions = [pi(n_obs) for pi, n_obs in zip(all_target_actors, next_obs)]
 
-            target_critic_input = torch.cat((*next_obs, *all_target_actions), dim=1)  # TODO need to be refined
+            target_critic_input = torch.cat((tensor_next_obs, torch.cat(all_target_actions)), dim=1)
         else:
             if self.discrete_action:
-                target_critic_input = torch.cat((next_obs[agent_i], onehot_from_logits(
-                    current_agent.target_actor(next_obs[agent_i]))), dim=1)
+                target_critic_input = torch.cat((
+                    tensor_next_obs[:, self.observation_index[agent_i][0]: self.observation_index[agent_i][1]],
+                    onehot_from_logits(
+                        current_agent.target_actor(
+                            next_obs[:, self.observation_index[agent_i][0]: self.observation_index[agent_i][1]]))),
+                    dim=1)
             else:
-                target_critic_input = torch.cat((next_obs[agent_i],
-                                                 current_agent.target_actor(next_obs[agent_i])), dim=1)
+                target_critic_input = torch.cat((
+                    tensor_next_obs[:, self.observation_index[agent_i][0]: self.observation_index[agent_i][1]],
+                    current_agent.target_actor(
+                        tensor_next_obs[:, self.observation_index[agent_i][0]: self.observation_index[agent_i][1]])),
+                    dim=1)
         target_critic_value = current_agent.target_critic(target_critic_input)
         target_value = rews[agent_i].view(-1, 1) + self.gamma * target_critic_value * (1 - dones[agent_i]).view(-1, 1)
         if self.alg_types[agent_i] == 'MADDPG':
-            critic_input = torch.cat((*obs, *acs), dim=1)  # TODO need to be refined
+            critic_input = torch.cat((tensor_obs, tensor_acs), dim=1)
         else:  # DDPG
-            critic_input = torch.cat((obs[agent_i], acs[agent_i]), dim=1)
+            critic_input = torch.cat((
+                tensor_obs[:, self.observation_index[agent_i][0]: self.observation_index[agent_i][1]],
+                tensor_acs[:, self.action_index[agent_i][0]: self.action_index[agent_i][1]]),
+                dim=1)
         actual_value = current_agent.critic(critic_input)
 
         critic_loss = MSELoss(actual_value, target_value.detach())
