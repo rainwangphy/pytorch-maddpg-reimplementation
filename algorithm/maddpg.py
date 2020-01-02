@@ -154,26 +154,31 @@ class MADDPG(object):
         tensor_acs = torch.from_numpy(acs).float()
         tensor_obs = torch.from_numpy(obs).float()
         tensor_next_obs = torch.from_numpy(next_obs).float()
+        tensor_rews = torch.from_numpy(rews).float()
+        tensor_dones = torch.from_numpy(~dones).float()
 
         current_agent = self.agents[agent_i]
 
         current_agent.critic_optimizer.zero_grad()
-        if self.alg_types == 'MADDPG':
+        if self.alg_types[agent_i] == 'MADDPG':
             all_target_actors = self.target_actors()
             if self.discrete_action:
-                all_target_actions = [onehot_from_logits(pi(n_obs)) for pi, n_obs in
-                                      zip(all_target_actors, next_obs)]
+                all_target_actions = [onehot_from_logits(pi(
+                    tensor_obs[:, self.observation_index[agent_index][0]:self.observation_index[agent_index][1]]
+                )) for pi, agent_index in
+                                      zip(all_target_actors, range(self.num_agent))]
             else:
-                all_target_actions = [pi(n_obs) for pi, n_obs in zip(all_target_actors, next_obs)]
-
-            target_critic_input = torch.cat((tensor_next_obs, torch.cat(all_target_actions)), dim=1)
+                all_target_actions = [pi(
+                    tensor_obs[:, self.observation_index[agent_index][0]:self.observation_index[agent_index][1]])
+                    for pi, agent_index in zip(all_target_actors, range(self.num_agent))]
+            target_critic_input = torch.cat((tensor_next_obs, torch.cat(all_target_actions, dim=1)), dim=1)
         else:
             if self.discrete_action:
                 target_critic_input = torch.cat((
                     tensor_next_obs[:, self.observation_index[agent_i][0]: self.observation_index[agent_i][1]],
                     onehot_from_logits(
                         current_agent.target_actor(
-                            next_obs[:, self.observation_index[agent_i][0]: self.observation_index[agent_i][1]]))),
+                            tensor_next_obs[:, self.observation_index[agent_i][0]: self.observation_index[agent_i][1]]))),
                     dim=1)
             else:
                 target_critic_input = torch.cat((
@@ -182,7 +187,8 @@ class MADDPG(object):
                         tensor_next_obs[:, self.observation_index[agent_i][0]: self.observation_index[agent_i][1]])),
                     dim=1)
         target_critic_value = current_agent.target_critic(target_critic_input)
-        target_value = rews[agent_i].view(-1, 1) + self.gamma * target_critic_value * (1 - dones[agent_i]).view(-1, 1)
+        target_value = tensor_rews[:, agent_i].unsqueeze(1) + self.gamma * target_critic_value * tensor_dones[:, agent_i].unsqueeze(1)
+
         if self.alg_types[agent_i] == 'MADDPG':
             critic_input = torch.cat((tensor_obs, tensor_acs), dim=1)
         else:  # DDPG
@@ -191,39 +197,48 @@ class MADDPG(object):
                 tensor_acs[:, self.action_index[agent_i][0]: self.action_index[agent_i][1]]),
                 dim=1)
         actual_value = current_agent.critic(critic_input)
-
         critic_loss = MSELoss(actual_value, target_value.detach())
         critic_loss.backward()
-        torch.nn.utils.clip_grad_norm(current_agent.critic.parameters(), 0.5)
+        torch.nn.utils.clip_grad_norm_(current_agent.critic.parameters(), 0.5)
         current_agent.critic_optimizer.step()
 
         current_agent.actor_optimizer.zero_grad()
         if self.discrete_action:
-            current_action_out = current_agent.actor[obs[agent_i]]
+            current_action_out = current_agent.actor(
+                tensor_obs[:, self.observation_index[agent_i][0]:self.observation_index[agent_i][1]]
+            )
             current_action_input_critic = gumbel_softmax(current_action_out, hard=True)
         else:
-            current_action_out = current_agent.actor[obs[agent_i]]
+            current_action_out = current_agent.actor(
+                tensor_obs[:, self.observation_index[agent_i][0]:self.observation_index[agent_i][1]]
+            )
             current_action_input_critic = current_action_out
 
         if self.alg_types[agent_i] == 'MADDPG':
             all_actor_action = []
             all_target_actors = self.target_actors()
-            for i, pi, ob in zip(range(self.num_agent), all_target_actors, obs):
+            for i, pi in zip(range(self.num_agent), all_target_actors):
                 if i == agent_i:
                     all_actor_action.append(current_action_input_critic)
                 else:
                     if self.discrete_action:
-                        all_actor_action.append(onehot_from_logits(all_target_actors[i](ob)))
+                        all_actor_action.append(onehot_from_logits(all_target_actors[i](
+                            tensor_obs[:, self.observation_index[i][0]:self.observation_index[i][1]]
+                        )))
                     else:
-                        all_actor_action.append(all_target_actors[i](ob))
-            critic_input = torch.cat([obs, all_actor_action], dim=1)
+                        all_actor_action.append(all_target_actors[i](
+                            tensor_obs[:, self.observation_index[i][0]:self.observation_index[i][1]]
+                        ))
+            critic_input = torch.cat((tensor_obs, torch.cat(all_actor_action, dim=1)), dim=1)
         else:
-            critic_input = torch.cat([obs[agent_i], current_action_input_critic], dim=1)
+            critic_input = torch.cat((
+                tensor_obs[:, self.observation_index[agent_i][0]:self.observation_index[agent_i][1]],
+                current_action_input_critic), dim=1)
 
         actor_loss = -current_agent.critic(critic_input).mean()
         actor_loss += (current_action_out ** 2).mean() * 1e-3
         actor_loss.backward()
-        torch.nn.utils.clip_grad_norm(current_agent.actor.parameters(), 0.5)
+        torch.nn.utils.clip_grad_norm_(current_agent.actor.parameters(), 0.5)
         current_agent.actor_optimizer.step()
 
     def update_all_agent(self):
