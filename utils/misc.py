@@ -1,9 +1,8 @@
-import os
-import torch
-import torch.nn.functional as F
-import torch.distributed as dist
 # from torch.autograd import Variable
 import numpy as np
+import torch
+import torch.distributed as dist
+import torch.nn.functional as F
 
 
 # https://github.com/ikostrikov/pytorch-ddpg-naf/blob/master/ddpg.py#L11

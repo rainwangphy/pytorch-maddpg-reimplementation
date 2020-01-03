@@ -1,8 +1,9 @@
-from .network import MLPNetwork
-from torch.optim import Adam
-from .noise import OUNoise
-from .misc import gumbel_softmax, onehot_from_logits, hard_update
 import torch
+from torch.optim import Adam
+
+from .misc import gumbel_softmax, onehot_from_logits, hard_update
+from .network import MLPNetwork
+from .noise import OUNoise
 
 
 class DDPGAgent(object):

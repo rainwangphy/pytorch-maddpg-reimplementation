@@ -2,11 +2,11 @@
 @author
 """
 
+import torch
 from gym.spaces import Box
+
 from utils.agent import DDPGAgent
 from utils.misc import onehot_from_logits, gumbel_softmax, soft_update
-import torch
-import numpy as np
 
 MSELoss = torch.nn.MSELoss()
 
@@ -166,7 +166,7 @@ class MADDPG(object):
                 all_target_actions = [onehot_from_logits(pi(
                     tensor_obs[:, self.observation_index[agent_index][0]:self.observation_index[agent_index][1]]
                 )) for pi, agent_index in
-                                      zip(all_target_actors, range(self.num_agent))]
+                    zip(all_target_actors, range(self.num_agent))]
             else:
                 all_target_actions = [pi(
                     tensor_obs[:, self.observation_index[agent_index][0]:self.observation_index[agent_index][1]])

@@ -1,11 +1,12 @@
 import argparse
-# from pathlib import Path
-from utils.make_env import make_env
+
 import numpy as np
 import torch
+
 from algorithm.maddpg import MADDPG
 from utils.buffer import ReplayBuffer
-from gym.spaces import Box
+# from pathlib import Path
+from utils.make_env import make_env
 
 
 def run(config):
