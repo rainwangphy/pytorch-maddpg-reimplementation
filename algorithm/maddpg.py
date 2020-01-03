@@ -178,8 +178,8 @@ class MADDPG(object):
                     tensor_next_obs[:, self.observation_index[agent_i][0]: self.observation_index[agent_i][1]],
                     onehot_from_logits(
                         current_agent.target_actor(
-                            tensor_next_obs[:, self.observation_index[agent_i][0]: self.observation_index[agent_i][1]]))),
-                    dim=1)
+                            tensor_next_obs[:, self.observation_index[agent_i][0]: self.observation_index[agent_i][1]]))
+                ), dim=1)
             else:
                 target_critic_input = torch.cat((
                     tensor_next_obs[:, self.observation_index[agent_i][0]: self.observation_index[agent_i][1]],
@@ -187,7 +187,9 @@ class MADDPG(object):
                         tensor_next_obs[:, self.observation_index[agent_i][0]: self.observation_index[agent_i][1]])),
                     dim=1)
         target_critic_value = current_agent.target_critic(target_critic_input)
-        target_value = tensor_rews[:, agent_i].unsqueeze(1) + self.gamma * target_critic_value * tensor_dones[:, agent_i].unsqueeze(1)
+        target_value = \
+            tensor_rews[:, agent_i].unsqueeze(1) + \
+            self.gamma * target_critic_value * tensor_dones[:, agent_i].unsqueeze(1)
 
         if self.alg_types[agent_i] == 'MADDPG':
             critic_input = torch.cat((tensor_obs, tensor_acs), dim=1)
